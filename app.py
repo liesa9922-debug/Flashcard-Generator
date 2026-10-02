@@ -11,28 +11,10 @@ if not API_KEY:
 
 genai.configure(api_key=API_KEY)
 
-# 2. Dynamic Model Selection (Finds whatever model works with your key/SDK)
-@st.cache_resource
-def get_working_model():
-    try:
-        available_models = [
-            m.name for m in genai.list_models() 
-            if "generateContent" in m.supported_generation_methods
-        ]
-        # Prefer flash, fallback to pro or first available
-        for preferred in ["gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-pro"]:
-            for m in available_models:
-                if preferred in m:
-                    return genai.GenerativeModel(m)
-        if available_models:
-            return genai.GenerativeModel(available_models[0])
-    except Exception as e:
-        st.error(f"Failed to fetch models: {e}")
-    return genai.GenerativeModel("gemini-1.5-flash")
+# 2. Use Gemini 2.5 Flash (has free tier quota)
+model = genai.GenerativeModel("gemini-2.5-flash")
 
-model = get_working_model()
-
-# 3. Streamlit UI
+# 3. Streamlit Interface
 st.title("AI Flashcard Generator")
 notes = st.text_area("Paste your study notes:", height=180)
 num_cards = st.slider("Number of flashcards", min_value=1, max_value=10, value=5)
