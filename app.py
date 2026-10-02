@@ -11,8 +11,7 @@ if not API_KEY:
 
 genai.configure(api_key=API_KEY)
 # Using gemini-1.5-flash prevents 503 traffic overloads
-model = genai.GenerativeModel("gemini-1.5-flash")
-
+model = genai.GenerativeModel("gemini-1.5-flash-latest")
 st.title("AI Flashcard Generator")
 notes = st.text_area("Paste your study notes:", height=180)
 num_cards = st.slider("Number of flashcards", min_value=1, max_value=10, value=5)
