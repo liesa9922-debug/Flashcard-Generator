@@ -1,7 +1,7 @@
 import os
 import streamlit as st
 import google.generativeai as genai
-from google.api_core.exceptions import ServiceUnavailable, ResourceExhausted
+from google.api_core.exceptions import ServiceUnavailable
 
 # 1. API Configuration
 API_KEY = st.secrets.get("GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
@@ -11,69 +11,50 @@ if not API_KEY:
 
 genai.configure(api_key=API_KEY)
 
-# 2. Dynamic Model Discovery (Eliminates 404 errors)
-@st.cache_data(ttl=600)
-def get_supported_models():
-    try:
-        models = [
-            m.name.replace("models/", "")
-            for m in genai.list_models()
-            if "generateContent" in m.supported_generation_methods
-        ]
-        return models
-    except Exception as e:
-        st.error(f"Error fetching models: {e}")
-        return []
+# Active working model
+model = genai.GenerativeModel("gemini-flash-latest")
 
-available_models = get_supported_models()
+# 2. UI Layout
+st.set_page_config(page_title="AI Flashcard Generator", page_icon="🎴", layout="centered")
+st.title("🎴 AI Flashcard Generator")
+st.caption("Generate study cards instantly from your notes using Gemini.")
 
-if not available_models:
-    st.error("No text generation models found for this API key. Verify key permissions in Google AI Studio.")
-    st.stop()
-
-# Auto-select the first Flash model (Flash has free tier quota)
-default_idx = 0
-for idx, name in enumerate(available_models):
-    if "flash" in name.lower():
-        default_idx = idx
-        break
-
-# 3. User Interface
-st.title("AI Flashcard Generator")
-
-selected_model = st.selectbox(
-    "Active Model (automatically detected from your key):",
-    available_models,
-    index=default_idx
-)
-model = genai.GenerativeModel(selected_model)
-
-notes = st.text_area("Paste your study notes:", height=180)
+notes = st.text_area("Paste your study notes:", height=200, placeholder="Paste lecture notes or concepts here...")
 num_cards = st.slider("Number of flashcards", min_value=1, max_value=10, value=5)
 
-if st.button("Generate Flashcards"):
+if st.button("Generate Flashcards", type="primary"):
     if not notes.strip():
-        st.warning("Please enter some notes first.")
+        st.warning("Please enter some study notes first.")
     else:
         prompt = f"""
-        Create exactly {num_cards} flashcards from the following notes.
-        Format strictly as:
-        Q: [Question]
-        A: [Answer]
+        Extract key concepts from these notes and generate exactly {num_cards} study flashcards.
+        Format each card strictly as:
+        Q: [Concise question]
+        A: [Clear, accurate answer]
         ---
         Notes:
         {notes}
         """
-        with st.spinner(f"Generating flashcards using {selected_model}..."):
+        with st.spinner("Generating flashcards..."):
             try:
                 response = model.generate_content(prompt)
-                cards = response.text.split("---")
-                for card in cards:
-                    if card.strip():
-                        st.info(card.strip())
-            except ResourceExhausted:
-                st.error("Free quota limit reached for this specific model. Pick another Flash model from the dropdown above.")
+                raw_cards = response.text.split("---")
+                
+                valid_cards = [c.strip() for c in raw_cards if c.strip() and "Q:" in c]
+                
+                if valid_cards:
+                    st.success(f"Generated {len(valid_cards)} flashcards!")
+                    for idx, card in enumerate(valid_cards, 1):
+                        with st.expander(f"Card {idx}", expanded=True):
+                            lines = card.split("\n")
+                            q = next((l.replace("Q:", "").strip() for l in lines if l.startswith("Q:")), "")
+                            a = next((l.replace("A:", "").strip() for l in lines if l.startswith("A:")), "")
+                            st.markdown(f"**Question:** {q}")
+                            st.markdown(f"**Answer:** {a}")
+                else:
+                    st.write(response.text)
+                    
             except ServiceUnavailable:
-                st.error("Google's servers are temporarily busy. Please retry in a few seconds.")
+                st.error("Google AI service is momentarily busy. Please try again in 10 seconds.")
             except Exception as e:
                 st.error(f"Error: {e}")
